@@ -49,11 +49,12 @@ async def shopee_websocket(generated_uuid, waktu, sesi, usersig, durasi_detik):
                 while time.time() < waktu_berhenti:
                     await websocket.recv()
         except websockets.exceptions.ConnectionClosedError as _:
-            st.warning(f"Connection closed on {generated_uuid}. Reconnecting...")
+            print(f"Connection closed on {generated_uuid}. Reconnecting...")
             await asyncio.sleep(10)
         except Exception as e:
-            st.error(f"An unexpected error occurred on {generated_uuid}: {e}")
+            print(f"An unexpected error occurred on {generated_uuid}: {e}")
             await asyncio.sleep(10)
+
 
 
 def current_time_to_timestamp():
@@ -69,8 +70,7 @@ def join_shopee_session(session_id, generated_uuid, usersig):
         "ver": 1
     }
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.193 '
-                      'Mobile Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.193 Mobile Safari/537.36',
         'Referer': BASE_URL,
         'Authorization': f'Bearer {usersig}'
     }
@@ -82,10 +82,10 @@ def join_shopee_session(session_id, generated_uuid, usersig):
         if 'data' in json_response and 'usersig' in json_response['data']:
             return json_response['data']['usersig']
         else:
-            st.error(f"Error joining Shopee session {session_id}: Invalid response format")
+            print(f"Error joining Shopee session {session_id}: Invalid response format")
             return None
     except requests.exceptions.RequestException as e:
-        st.error(f"Error joining Shopee session {session_id}: {e}")
+        print(f"Error joining Shopee session {session_id}: {e}")
         return None
 
 
@@ -150,18 +150,18 @@ def login(username, key):
         values = result.get("values", [])
 
         if not values:
-            st.error("No data found in the Google Sheet.")
+            print("No data found in the Google Sheet.")
             return None
 
         for row in values:
             if len(row) >= 2 and row[0] == username and row[1] == key:
                 return row[1]  # Assuming the usersig is in the second column (index 1)
 
-        st.error("Invalid username or key.")
+        print("Invalid username or key.")
         return None
 
     except HttpError as err:
-        st.error(f"Error accessing Google Sheets API: {err}")
+        print(f"Error accessing Google Sheets API: {err}")
         return None
 
 
