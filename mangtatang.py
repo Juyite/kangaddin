@@ -8,6 +8,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import json
+import time
 
 BASE_URL = "https://live.shopee.co.id"
 API_URL = f"{BASE_URL}/api/v1/session/"
@@ -35,21 +36,23 @@ creds = service_account.Credentials.from_service_account_info(creds_dict, scopes
 service = build("sheets", "v4", credentials=creds)
 
 
-async def shopee_websocket(generated_uuid, waktu, sesi, usersig):
+async def shopee_websocket(generated_uuid, waktu, sesi, usersig, durasi_detik):
     uri = (f"{WEBSOCKET_URL}&conn_ts={waktu}"
            f"&device_id={generated_uuid}&session_id={sesi}"
            f"&usersig={usersig}&version=v2")
 
-    while True:
+    waktu_berhenti = time.time() + durasi_detik  # Hitung waktu berhenti berdasarkan durasi_detik
+
+    while time.time() < waktu_berhenti:
         try:
             async with websockets.connect(uri) as websocket:
-                while True:
+                while time.time() < waktu_berhenti:
                     await websocket.recv()
         except websockets.exceptions.ConnectionClosedError as _:
-            print(f"Connection closed on {generated_uuid}. Reconnecting...")
+            st.warning(f"Connection closed on {generated_uuid}. Reconnecting...")
             await asyncio.sleep(10)
         except Exception as e:
-            print(f"An unexpected error occurred on {generated_uuid}: {e}")
+            st.error(f"An unexpected error occurred on {generated_uuid}: {e}")
             await asyncio.sleep(10)
 
 
@@ -66,7 +69,8 @@ def join_shopee_session(session_id, generated_uuid, usersig):
         "ver": 1
     }
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.193 Mobile Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.193 '
+                      'Mobile Safari/537.36',
         'Referer': BASE_URL,
         'Authorization': f'Bearer {usersig}'
     }
@@ -78,10 +82,10 @@ def join_shopee_session(session_id, generated_uuid, usersig):
         if 'data' in json_response and 'usersig' in json_response['data']:
             return json_response['data']['usersig']
         else:
-            print(f"Error joining Shopee session {session_id}: Invalid response format")
+            st.error(f"Error joining Shopee session {session_id}: Invalid response format")
             return None
     except requests.exceptions.RequestException as e:
-        print(f"Error joining Shopee session {session_id}: {e}")
+        st.error(f"Error joining Shopee session {session_id}: {e}")
         return None
 
 
@@ -99,6 +103,12 @@ def shopee_streamlit_app():
     session_ids = st.text_area("Enter session IDs (one per line):", "")
     session_ids = [line.strip() for line in session_ids.split("\n") if line.strip()]
 
+    # Dropdown untuk memilih durasi eksekusi dalam jam
+    durasi_eksekusi = st.selectbox("Durasi Eksekusi:",
+                                   ["1 jam", "2 jam", "3 jam", "4 jam", "5 jam", "6 jam", "7 jam", "8 jam", "9 jam",
+                                    "10 jam"])
+    durasi_detik = int(durasi_eksekusi.split()[0]) * 3600  # Konversi ke detik
+
     if st.button("Login and Start"):
         if not username or not key:
             st.error("Please enter both username and key.")
@@ -109,19 +119,20 @@ def shopee_streamlit_app():
         if usersig:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(run_shopee_websockets(num_connections, session_ids, usersig))
+            loop.run_until_complete(run_shopee_websockets(num_connections, session_ids, usersig, durasi_detik))
 
 
-async def run_shopee_websockets(num_connections, session_ids, usersig):
+async def run_shopee_websockets(num_connections, session_ids, usersig, durasi_detik):
     tasks = []
 
     for session_id in session_ids:
         for _ in range(num_connections):
             result_timestamp = current_time_to_timestamp()
             generated_uuid = str(uuid.uuid4())
-            usersig = join_shopee_session(session_id, generated_uuid, usersig)
-            if usersig:
-                task = shopee_websocket(generated_uuid, result_timestamp, session_id, usersig)
+            usersig_session = join_shopee_session(session_id, generated_uuid, usersig)
+
+            if usersig_session:
+                task = shopee_websocket(generated_uuid, result_timestamp, session_id, usersig_session, durasi_detik)
                 tasks.append(task)
 
     await asyncio.gather(*tasks)
@@ -139,20 +150,31 @@ def login(username, key):
         values = result.get("values", [])
 
         if not values:
-            print("No data found in the Google Sheet.")
+            st.error("No data found in the Google Sheet.")
             return None
 
         for row in values:
             if len(row) >= 2 and row[0] == username and row[1] == key:
                 return row[1]  # Assuming the usersig is in the second column (index 1)
 
-        print("Invalid username or key.")
+        st.error("Invalid username or key.")
         return None
 
     except HttpError as err:
-        print(f"Error accessing Google Sheets API: {err}")
+        st.error(f"Error accessing Google Sheets API: {err}")
         return None
 
 
 if __name__ == "__main__":
     shopee_streamlit_app()
+
+    batas_waktu_detik = 3600
+    waktu_mulai = time.time()
+
+    while time.time() - waktu_mulai < batas_waktu_detik:
+        try:
+            time.sleep(10)
+        except KeyboardInterrupt:
+            st.stop()  # Memberitahu Streamlit untuk berhenti
+
+    st.success("Aplikasi berhenti karena batas waktu telah tercapai.")
