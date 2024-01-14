@@ -91,35 +91,28 @@ def join_shopee_session(session_id, generated_uuid, usersig):
 
 def shopee_streamlit_app():
     st.title("👁️View Mata Versi Premium👁️")
-
-    # Input teks untuk login
     username = st.text_input("Enter your username:")
     key = st.text_input("Enter your key:", type="password")
 
-    # Input teks untuk num_connections
     num_connections = st.slider("Select the number of view:", 1, 100, 1)
-
-    # Input teks untuk session_ids
     session_ids = st.text_area("Enter session IDs (one per line):", "")
     session_ids = [line.strip() for line in session_ids.split("\n") if line.strip()]
 
-    # Dropdown untuk memilih durasi eksekusi dalam jam
     durasi_eksekusi = st.selectbox("Durasi Eksekusi:",
                                    ["1 jam", "2 jam", "3 jam", "4 jam", "5 jam", "6 jam", "7 jam", "8 jam", "9 jam",
                                     "10 jam"])
-    durasi_detik = int(durasi_eksekusi.split()[0]) * 3600  # Konversi ke detik
+    durasi_detik = int(durasi_eksekusi.split()[0]) * 3600
 
     if st.button("Login and Start"):
         if not username or not key:
             st.error("Please enter both username and key.")
-            return
-
-        usersig = login(username, key)
-
-        if usersig:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(run_shopee_websockets(num_connections, session_ids, usersig, durasi_detik))
+        else:
+            usersig = login(username, key)
+            if usersig:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(run_shopee_websockets(num_connections, session_ids, usersig, durasi_detik))
+                st.success("Aplikasi berhenti karena batas waktu telah tercapai.")
 
 
 async def run_shopee_websockets(num_connections, session_ids, usersig, durasi_detik):
@@ -167,6 +160,7 @@ def login(username, key):
 
 if __name__ == "__main__":
     shopee_streamlit_app()
+    st.stop()  # Stop Streamlit app after executing the initial setup
 
     batas_waktu_detik = 3600
     waktu_mulai = time.time()
@@ -175,6 +169,8 @@ if __name__ == "__main__":
         try:
             time.sleep(10)
         except KeyboardInterrupt:
-            st.stop()  # Memberitahu Streamlit untuk berhenti
+            st.stop()  # Stop Streamlit app if KeyboardInterrupt occurs
+
+    st.success("Aplikasi berhenti karena batas waktu telah tercapai.")
 
     st.success("Aplikasi berhenti karena batas waktu telah tercapai.")
